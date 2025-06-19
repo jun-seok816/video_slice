@@ -1,0 +1,31 @@
+{  
+  "scripts": {
+    "start": "nodemon --exec ./node_modules/.bin/ts-node ./src/web.ts",
+    "pstart": "pm2 start ./dist/web.js --name tooniz --watch --max-memory-restart 9900M",
+    "build": "cross-env NODE_ENV=development webpack --config webpack.config.js"
+  },
+  "author": "hdr",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "express-mysql-session": "^2.1.8",
+    "express-session": "^1.18.1",
+    "mysql2": "^2.3.3",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/body-parser": "^1.19.6",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/dotenv": "^8.2.3",
+    "@types/express": "^5.0.3",
+    "@types/express-session": "^1.18.2",
+    "@types/node": "^24.0.3",
+    "nodemon": "^2.0.15",
+    "ts-loader": "^9.2.6",
+    "ts-node": "^10.4.0",
+    "typescript": "^5.4.5"
+  }
+}

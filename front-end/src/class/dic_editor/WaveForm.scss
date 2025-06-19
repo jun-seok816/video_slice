@@ -1,0 +1,8 @@
+/* CSS 정의 (예: src/styles/wavesurfer.css) */
+.wavesurfer-region {
+  background-color: rgba(204, 121, 82, 0.8);
+  transition: background-color 0.1s ease;
+}
+.wavesurfer-region.selected {
+  background-color: #fa5252 !important;
+}
