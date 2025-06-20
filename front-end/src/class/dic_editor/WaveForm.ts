@@ -449,12 +449,12 @@ export class WaveForm {
           return;
         } else if (
           near.sTime - sTime >= 0.5 &&
-          near.sTime - sTime <= 1 &&
+          near.sTime - sTime <= 0.5 &&
           !eTime
         ) {
           eTime = near.sTime;
-        } else if (near.sTime - sTime > 1 && !eTime) {
-          eTime = sTime + 1;
+        } else if (near.sTime - sTime > 0.5 && !eTime) {
+          eTime = sTime + 0.5;
         }
       }
     } else {

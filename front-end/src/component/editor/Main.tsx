@@ -44,6 +44,9 @@ export default function C_Main() {
       lv_Obj.pt_Wavesurfer = new WaveForm();
       lv_Obj.pt_Wavesurfer.im_getWaveInfo();
       lv_Obj.pt_Wavesurfer.im_addWaveSurferEvent();
+      lv_Obj.pt_Wavesurfer.pt_wavesurfer.zoom(
+        window.gv_waveRange
+      );
       lv_Obj.im_load_save();
     }
 
