@@ -30,7 +30,7 @@ export default function C_Main() {
       bottom: 60,
     };
     window.gv_fontSize = 15;
-    window.gv_waveRange = 50;
+    window.gv_waveRange = 100;
   });
 
   useEffect(() => {

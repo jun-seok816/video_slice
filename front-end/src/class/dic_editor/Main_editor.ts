@@ -494,7 +494,7 @@ export class Main_editor extends Main implements I_timecode_items {
         Main.iv_Swal
           .fire({
             title:
-              '<span class="mt-3 mb-3" style="color: #fff;">타임라인 삭제</span>',
+              '<span class="mt-3 mb-3" style="color: black;">타임라인 삭제</span>',
             html: `
               <div class="h6 text-gray" style="color: gray;">몇 번부터 몇 번까지 삭제할까요?</div>
               <div class="flex-wrap mt-4 d-flex">

@@ -84,7 +84,7 @@ export class WaveForm {
       nextRegion: undefined,
       regionList: new Map(),
       isBeingCreatedEndTime: 0,
-      isBeingCreatedId: "",
+      isBeingCreatedId: undefined,
       isBeingCreatedNextRegionStartTime: 9999999999,
       isBeingCreatedStartTime: 0,
       sequenceIsBeingCreated: false,
@@ -168,61 +168,51 @@ export class WaveForm {
     return { start, end };
   }
 
-  private lockScroll(lock: boolean) {
-    this.iv_wavesurfer.drawer.wrapper as HTMLElement;
-    if (!this.iv_wavesurfer.drawer.wrapper) return;
-    if (lock) {
-      this.iv_wavesurfer.drawer.wrapper = "hidden"; // 휠·키보드 스크롤 차단
-    } else {
-      this.iv_wavesurfer.drawer.wrapper = "";
-    }
-  }
+
   /** 보이는 Region만 add/remove */
   private updateVisibleRegions = () => {
     if (this.isUpdating) return;
-    //this.lockScroll(true);
-    try {
-      // 1) 플러그인이 준비됐는지 확인
-      const regPlugin = this.iv_wavesurfer.regions;
-      if (!regPlugin) return;
+    const RENDER_BUFFER_SEC = 30;   // 필요에 맞게 숫자 조정
+    // 1) 플러그인이 준비됐는지 확인
+    const regPlugin = this.iv_wavesurfer.regions;
+    if (!regPlugin) return;
 
-      // 2) 내부 리스트와 visible map 전부 초기화
-      regPlugin.clear();
-      this.visibleRegionInstances.forEach((inst) => inst.remove());
-      this.visibleRegionInstances.clear();
+    // 2) 내부 리스트와 visible map 전부 초기화
+    regPlugin.clear();
+    this.visibleRegionInstances.forEach((inst) => inst.remove());
+    this.visibleRegionInstances.clear();
 
-      // 3) Map의 region을 겹치지 않게 "초기화"
-      const sortedRegions = Array.from(this.iv_region.regionList.values()).sort(
-        (a, b) => a.sTime - b.sTime
-      );
+    // 3) Map의 region을 겹치지 않게 "초기화"
+    const sortedRegions = Array.from(this.iv_region.regionList.values()).sort(
+      (a, b) => a.sTime - b.sTime
+    );
 
-      let prevRegion: (typeof sortedRegions)[0] | null = null;
-      for (const region of sortedRegions) {
-        if (prevRegion && region.sTime < prevRegion.eTime) {
-          region.sTime = prevRegion.eTime;
-          if (region.eTime < region.sTime) {
-            region.eTime = region.sTime;
-          }
+    let prevRegion: (typeof sortedRegions)[0] | null = null;
+    for (const region of sortedRegions) {
+      if (prevRegion && region.sTime < prevRegion.eTime) {
+        region.sTime = prevRegion.eTime;
+        if (region.eTime < region.sTime) {
+          region.eTime = region.sTime;
         }
-        prevRegion = region;
       }
-
-      // 4) 보이는 시간 범위 계산
-      const { start, end } = this.getVisibleTimeRange();
-
-      // 5) Map 순회하며 조건 만족하는 것만 생성
-      this.iv_region.regionList.forEach((tc, id) => {
-        if (tc.eTime > start && tc.sTime < end) {
-          //console.log('updateVisibleRegions %o',tc);
-          const inst = this.im_makeRegion(tc);
-          this.visibleRegionInstances.set(id, inst);
-        }
-      });
-
-      this.im_updateRegionStyle();
-    } finally {
-      //this.lockScroll(false);
+      prevRegion = region;
     }
+
+    // 4) 보이는 시간 범위 계산
+    const { start, end } = this.getVisibleTimeRange();
+    const expandedStart = Math.max(0, start - RENDER_BUFFER_SEC);
+    const expandedEnd = end + RENDER_BUFFER_SEC;
+
+    // 5) Map 순회하며 조건 만족하는 것만 생성
+    this.iv_region.regionList.forEach((tc, id) => {
+      if (tc.eTime > expandedStart && tc.sTime < expandedEnd) {
+        //console.log('updateVisibleRegions %o',tc);
+        const inst = this.im_makeRegion(tc);
+        this.visibleRegionInstances.set(id, inst);
+      }
+    });
+
+    this.im_updateRegionStyle();
   };
 
   public async im_getWaveInfo() {
@@ -336,6 +326,7 @@ export class WaveForm {
         }
       }
     });
+    
     this.iv_wavesurfer.on("region-click", (region: Region) => {
       setTimeout(() => {
         this.iv_wavesurfer.setCurrentTime(region.start - 0.02);
@@ -360,7 +351,7 @@ export class WaveForm {
       this.im_sinkRegionListByWavesurfer(region);
     });
 
-    this.iv_wavesurfer.on("region-created", (region: Region) => {
+    this.iv_wavesurfer.on("region-created", (region: Region) => {      
       if (this.iv_region.isBeingCreatedId) {
         console.log("region-create", region, this.iv_region.isBeingCreatedId);
         region.id === this.iv_region.isBeingCreatedId;
@@ -472,7 +463,7 @@ export class WaveForm {
         }
       } else {
         if (near.sTime - sTime < 0.5) {
-          alert("0.5초 이상의 간격이 필요합니다");
+          Main.im_toast("0.5초 이상의 간격이 필요합니다",'warn');
           return;
         } else if (
           near.sTime - sTime >= 0.5 &&
@@ -547,7 +538,7 @@ export class WaveForm {
       this.iv_region.isBeingCreatedStartTime + 0.01,
       this.iv_region.isBeingCreatedId
     );
-    this.im_makeRegion(timecode);
+    this.im_makeRegion(timecode);    
     const lv_ch =
       this.iv_wavesurfer.regions.list[this.iv_region.isBeingCreatedId];
     if (lv_ch === undefined) {
@@ -566,10 +557,10 @@ export class WaveForm {
    *  임의 길의의 시퀀스 생성 end
    */
   public im_makingStartButtonKeyUp() {
-    if (!window.gv_videotag || !this.iv_region.isBeingCreatedId) return;
+    if (!window.gv_videotag) return;
     if (this.iv_region.sequenceIsBeingCreated) {
       this.iv_region.sequenceIsBeingCreated = false;
-      if (this.iv_region.isBeingCreatedId === null) {
+      if (!this.iv_region.isBeingCreatedId) {
         console.error("not found regionID");
         return;
       }
@@ -590,21 +581,12 @@ export class WaveForm {
         Main.im_toast("종료 시간과 0.5초 이상 텀이 있어야 합니다.", "warn");
         this.iv_region.regionList.delete(this.iv_region.isBeingCreatedId);
         targetRegion.remove();
-      } else {
-        const timecode = new TimeCode(
-          "",
-          targetRegion.start.toFixed(3) * 1,
-          targetRegion.end.toFixed(3) * 1,
-          targetRegion.id
-        );
-
-        this.iv_region.regionList.set(timecode.id, timecode);
-        this.im_sortingByRegionListData();
-      }
+      } 
     }
+    this.isUpdating = false;
     this.iv_region.isBeingCreatedStartTime = 0;
     this.iv_region.isBeingCreatedEndTime = 0;
-    this.iv_region.isBeingCreatedId = "";
+    this.iv_region.isBeingCreatedId = undefined;
     this.iv_region.isBeingCreatedNextRegionStartTime =
       window.gv_videotag.duration;
   }
@@ -672,10 +654,10 @@ export class WaveForm {
       // 겹침 확인
       if (region.end > nextTC.sTime) {
         // case1: 다음 영역이 작거나 같다면 내 영역에 붙이기
-        if (nextTC.eTime - nextTC.sTime <= 0.5) {
-          if (region.end - region.start <= 0.5) {
+        if (nextTC.eTime - nextTC.sTime <= 1) {
+          if (region.end - region.start <= 1) {
             region.update({
-              start: nextTC.sTime - 0.5,
+              start: nextTC.sTime - 1,
               end: nextTC.sTime,
             });
           } else {
@@ -701,11 +683,11 @@ export class WaveForm {
 
       if (region.start < prevTC.eTime) {
         // case1: 이전 영역이 작거나 같다면 내 영역에 붙이기
-        if (prevTC.eTime - prevTC.sTime <= 0.5) {
-          if (region.end - region.start <= 0.5) {
+        if (prevTC.eTime - prevTC.sTime <= 1) {
+          if (region.end - region.start <= 1) {
             region.update({
               start: prevTC.eTime,
-              end: prevTC.eTime + 0.5,
+              end: prevTC.eTime + 1,
             });
           } else {
             region.update({ start: prevTC.eTime });

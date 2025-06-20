@@ -4,6 +4,7 @@ import C_Main from "./component/editor/Main";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, useNavigate } from "react-router-dom";
 import "bootstrap-icons/font/bootstrap-icons.css";
+import './index.scss';
 
 export default function Root(){
     return(
