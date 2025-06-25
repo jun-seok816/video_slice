@@ -6,11 +6,7 @@ import mysql, { Connection,Pool } from "mysql2";
 import session from "express-session";
 var MySQLStore = require("express-mysql-session")(session);
 import cookieParser from "cookie-parser";
-import Db from "./db";
 import dotenv from 'dotenv';
-import fs from 'fs';
-
-const lv_Db = new Db();
 
 // .env 파일에서 환경 변수 로드
 dotenv.config();
@@ -54,12 +50,6 @@ const gf_cs = (req: Request, res: Response, next: NextFunction)=>{
   }
 }
 
-
-process._myApp = {      
-  db:mysql.createPool(lv_Db.pt_Data.DB),
-  checkSession:gf_cs
-}
-
 //https://expressjs.com/ko/starter/static-files.html s
 app.set("puplic", path.join(__dirname, "../build"));
 app.use(express.static(app.settings.puplic));
@@ -70,13 +60,11 @@ app.use(bodyParser.urlencoded({ limit: "100mb", extended: false }));
 
 
 app.use(cookieParser());
-var sessionStore = new MySQLStore(lv_Db.pt_Data.DB);
 
 const sessionMiddleware = session({
   secret: "subscribe_loutbtbahah4281!@",
   resave: true,
-  saveUninitialized: false,
-  store: sessionStore,
+  saveUninitialized: false,  
   cookie: {
     maxAge: 24 * 60 * 60 * 1000 * 7, // 24 hours
   },
@@ -106,8 +94,8 @@ console.log(
     .map((l: { route: { methods: {}; path: any; }; }) => `${Object.keys(l.route.methods)[0].toUpperCase()} ${l.route.path}`)
 );
 
-const server = app.listen(lv_Db.pt_Data.port, () => {
-  console.log(`Example app listening on port ${lv_Db.pt_Data.port}`);
+const server = app.listen(3000, () => {
+  console.log(`Example app listening on port ${3000}`);
 }).setTimeout(12000000);
 
 server.keepAliveTimeout = 300; // Keep-Alive 연결 제한 시간
