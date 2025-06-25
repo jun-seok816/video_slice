@@ -635,10 +635,10 @@ export class WaveForm {
       // 겹침 확인
       if (region.end > nextTC.sTime) {
         // case1: 다음 영역이 작거나 같다면 내 영역에 붙이기
-        if (nextTC.eTime - nextTC.sTime <= 1) {
-          if (region.end - region.start <= 1) {
+        if (nextTC.eTime - nextTC.sTime <= 0.5) {
+          if (region.end - region.start <= 0.5) {
             region.update({
-              start: nextTC.sTime - 1,
+              start: nextTC.sTime - 0.5,
               end: nextTC.sTime,
             });
           } else {
@@ -664,11 +664,11 @@ export class WaveForm {
 
       if (region.start < prevTC.eTime) {
         // case1: 이전 영역이 작거나 같다면 내 영역에 붙이기
-        if (prevTC.eTime - prevTC.sTime <= 1) {
-          if (region.end - region.start <= 1) {
+        if (prevTC.eTime - prevTC.sTime <= 0.5) {
+          if (region.end - region.start <= 0.5) {
             region.update({
               start: prevTC.eTime,
-              end: prevTC.eTime + 1,
+              end: prevTC.eTime + 0.5,
             });
           } else {
             region.update({ start: prevTC.eTime });
