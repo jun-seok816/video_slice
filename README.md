@@ -61,7 +61,7 @@ private updateVisibleRegions = () => {
 ## 4. 실행 방법
 
 ```bash
-git clone https://github.com/your-id/waveform-region-optimizer.git
+git clone https://github.com/jun-seok816/video_slice.git
 cd waveform-region-optimizer
 npm install
 npm start        # http://localhost:3000
