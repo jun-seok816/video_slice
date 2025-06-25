@@ -74,10 +74,11 @@ npm start        # http://localhost:3000
 
 ## 5. 체험 가이드
 
-1. **Add 100 Regions** 버튼 클릭  
-2. 마우스 휠로 빠르게 스크롤 & 줌 인/아웃  
-3. DevTools **Performance Insights** → **INP, Scripting** 수치 확인  
-4. Region 드래그 시 `isUpdating` 플래그로 **중복 렌더 차단** 체험
+1. Region 범위 조정
+2. Region 추가 삭제
+3. Waveform 재생,스크롤시 리렌더링 확인
+4. DevTools **Performance Insights** → **INP, Scripting** 수치 확인  
+5. Region 드래그 시 `isUpdating` 플래그로 **중복 렌더 차단** 체험
 
 ---
 
