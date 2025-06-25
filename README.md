@@ -21,7 +21,7 @@
 ## 2. 배경 & 문제 상황
 
 - Region 생성/삭제/수정 시 **모든 Region을 재렌더링**  
-- 50개 이상 Region에서 **스크롤·클릭 시 INP 500 ms+**, 체감 버벅임 심화  
+- 1000개 이상 Region에서 **스크롤·클릭 시 INP 500 ms+**, 체감 버벅임 심화  
 - DevTools Performance 탭 `Scripting` 영역 80 ms 이상 소모
 
 ---
