@@ -1,4 +1,4 @@
-# Waveform Region Render Optimizer (포트폴리오 데모)
+# Waveform Region Render
 
 > 보이는 구간만 렌더링해 **INP 548→170 ms(−69%)**로 낮춘 WaveSurfer.js 기반 Region 렌더링 최적화 데모.
 
