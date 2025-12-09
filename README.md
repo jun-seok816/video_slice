@@ -1,4 +1,5 @@
 # Waveform Region Render
+영상 내 음성을 자막으로 만드는 웹 프로젝트입니다 , 개발 중 생긴 최적화 문제를 어떻게 해결하기위해 가상 스크롤을 구현했습니다
 
 > 보이는 구간만 렌더링해 **INP 548→170 ms(−69%)**로 낮춘 WaveSurfer.js 기반 Region 렌더링 최적화 데모.
 
@@ -20,9 +21,9 @@
 - 로컬 실행
 ```bash
 git clone https://github.com/jun-seok816/video_slice.git
-cd video_slice/front-end
-npm install
-npm run dev    # webpack-dev-server, 기본 8080
+cd video_slice/back-end
+npm install      # npm version 20.19.5
+npm run start    # webpack-dev-server, 기본 8080
 ```
 
 ## 체험 포인트
@@ -35,6 +36,8 @@ npm run dev    # webpack-dev-server, 기본 8080
 - 스크롤·드래그 등 과열 구간에는 `throttle`·플래그 등 가드 로직이 필수.
 - DevTools 지표로 개선 효과를 수치화해야 설득력이 높아진다.
 
+## 외부API/라이브러리
+- WaveSurfer.js https://wavesurfer.xyz/docs/ © MIT license
+
 ## 라이선스 & 참고
 - clipSeek 내부 기능을 스터디·포트폴리오 목적으로 단순화·비공개화한 코드로, 상업적 사용은 금지됩니다.
-- WaveSurfer.js https://wavesurfer.xyz/docs/ © MIT license
