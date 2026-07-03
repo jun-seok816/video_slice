@@ -522,6 +522,12 @@ export class WaveForm {
     );
     this.im_makeRegion(timecode);
     this.im_sortingByRegionListData();
+    if(this.iv_region.isBeingCreatedId === undefined){
+      console.warn(
+        "isBeingCreatedId: %o",        
+        this.iv_region.isBeingCreatedId);
+        return;
+    }
     const lv_ch =
       this.iv_wavesurfer.regions.list[this.iv_region.isBeingCreatedId];
     if (lv_ch === undefined) {
