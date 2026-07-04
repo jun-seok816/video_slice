@@ -1,7 +1,7 @@
 # 유튜브 AI 번역기
 
-YouTube URL을 입력하면 영상을 서버에 내려받고, 음성 추출과 AI 자막 번역을 거쳐 현재 Waveform 기반 자막 편집기에서 바로 검수할 수 있도록 확장하는 프로젝트입니다.  
-React와 TypeScript 기반 편집 화면에 Express API를 연결하고, `yt-dlp`, `ffmpeg`, AI STT/번역 API를 조합해 `URL 입력 -> 영상 다운로드 -> 자막 생성/번역 -> 편집기 검수` 흐름을 구현합니다.
+YouTube URL을 입력하면 영상과 음성 인식용 오디오를 서버에 내려받고, AI로 자막을 생성·번역한 뒤 영상과 자막을 함께 보며 바로 검수·수정할 수 있도록 확장한 프로젝트입니다.  
+React와 TypeScript 기반 편집 화면에 Express API를 연결하고, `yt-dlp`, ElevenLabs 음성 인식 API, Gemini 번역 API, MySQL을 조합해 `URL 입력 -> 영상/오디오 다운로드 -> 자막 생성 -> 번역 -> 편집기 검수` 흐름을 구현합니다.
 
 ---
 
@@ -14,52 +14,53 @@ sequenceDiagram
     participant FE as 화면(React)
     participant API as 서버(Express)
     participant YTDLP as yt-dlp(유튜브 다운로더)
-    participant FFMPEG as ffmpeg(영상/음성 변환 도구)
-    participant AI as AI API(STT/번역)
+    participant Speech as 음성 인식
+    participant Gemini as Gemini 번역
+    participant DB as MySQL
     participant DATA as 저장소(/data/jobs)
     participant Editor as 자막 편집기
 
     rect rgb(245, 248, 255)
-        Note over User,API: 1. 유튜브 URL을 입력해 번역 작업 준비
-        User->>FE: 유튜브 URL, 제목, 원본 언어, 번역 언어 입력
-        FE->>API: 영상 정보 확인 요청
-        API->>YTDLP: 유튜브 영상 기본 정보 조회
-        YTDLP-->>API: 제목, 영상 길이, 썸네일 후보 반환
-        API-->>FE: 화면에 보여줄 영상 정보 반환
+        Note over User,API: 1. 유튜브 URL을 입력해 다운로드 작업 생성
+        User->>FE: 유튜브 URL, 원본 언어, 번역 언어 입력
+        FE->>API: /upload/youtube-url 요청
+        API->>DATA: data/jobs/{jobId} 폴더 생성
+        API->>YTDLP: 프론트 재생용 영상 다운로드
+        API->>YTDLP: 자막 생성을 위한 오디오 다운로드
+        API->>DB: ai_video_jobs 저장
+        API-->>FE: jobId, videoPath, audioPath 반환
     end
 
     rect rgb(250, 250, 240)
-        Note over FE,DATA: 2. 영상 다운로드 및 번역용 파일 준비
-        FE->>API: 영상 다운로드 요청
-        API->>DATA: 작업 폴더 생성
-        API->>YTDLP: 유튜브 영상을 video.mp4로 다운로드
-        API->>FFMPEG: 썸네일 이미지와 음성 파일 생성
-        API->>DATA: 영상 정보 파일 저장
-        API-->>FE: 작업 ID, 영상 경로, 영상 길이 반환
+        Note over FE,Speech: 2. 음성 인식으로 원문 자막 생성
+        FE->>API: 음성 인식 요청
+        API->>DB: ai_translation_jobs 생성
+        API->>Speech: 오디오 파일과 원본 언어 코드 전송
+        Speech-->>API: 단어별 시간 정보 반환
+        API->>DB: ai_subtitle_items 원문 자막 저장
+        API-->>FE: translationJobId, 자막 개수 반환
     end
 
     rect rgb(245, 255, 248)
-        Note over FE,AI: 3. AI로 자막 생성 및 번역
-        FE->>API: AI 자막 번역 요청
-        API->>AI: 음성 파일을 보내 원문 자막 생성 요청
-        AI-->>API: 원문 자막 반환
-        API->>AI: 선택한 언어로 번역 요청
-        AI-->>API: 번역 자막 반환
-        API->>DATA: 원문 자막 파일 저장
-        API->>DATA: 번역 자막 파일 저장
+        Note over FE,Gemini: 3. Gemini로 자막 번역
+        FE->>API: /translation/gemini 요청
+        API->>DB: 원문 자막 조회
+        API->>Gemini: 자막 배치 번역 요청
+        Gemini-->>API: 번역 결과 반환
+        API->>DB: translated_text 저장 및 작업 완료 처리
         API-->>FE: 번역 완료 상태 반환
     end
 
     rect rgb(255, 248, 245)
-        Note over FE,Editor: 4. 번역 결과를 편집기에서 검수
-        FE->>Editor: 해당 작업의 편집 화면으로 이동
-        Editor->>DATA: 번역할 영상 로드
-        Editor->>DATA: 번역 자막 로드
+        Note over FE,Editor: 4. 완료된 번역 영상을 편집기에서 검수
+        FE->>API: /translation/completed 목록 조회
+        FE->>API: /translation/subtitles 자막 조회
+        Editor->>DATA: videoPath 영상 로드
+        Editor->>API: 번역 자막 기반 TimeCode 로드
         User->>Editor: 파형과 자막 구간을 보며 검수 및 수정
     end
 ```
 
----
 
 ## 시연 영상
 
@@ -70,6 +71,18 @@ AI 영상 번역 기능 구현 후 추가 예정입니다.
 ## 시연 사이트
 
 구현 후 배포 URL 추가 예정입니다.
+
+---
+
+## 구현 범위
+
+- YouTube URL을 입력해 서버의 `data/jobs/{jobId}` 폴더에 영상과 음성 인식용 오디오를 저장합니다.
+- 다운로드 작업, 음성 인식 작업, 번역 작업, 자막 아이템은 MySQL 테이블에 저장합니다.
+- ElevenLabs 음성 인식 응답의 단어별 시간 정보를 자막 구간으로 묶어 저장합니다.
+- Gemini API로 저장된 원문 자막을 번역하고, 완료된 작업 목록에서 편집기로 다시 불러옵니다.
+- 편집기는 기존 WaveSurfer 기반 자막 타임라인을 재사용하며, 완료 작업 선택 시 영상과 번역 자막을 교체합니다.
+- 썸네일은 별도 이미지 파일을 생성하지 않고 YouTube 기본 썸네일 URL을 사용합니다.
+- 현재 구현은 ffmpeg로 영상/오디오를 후처리하지 않습니다. yt-dlp 포맷 선택과 병합 기능에 의존합니다.
 
 ---
 
@@ -86,7 +99,7 @@ erDiagram
         varchar youtube_url "YouTube URL"
         varchar title "영상 제목"
         varchar video_path "다운로드 영상 경로"
-        varchar audio_path "추출 오디오 경로"
+        varchar audio_path "음성 인식용 오디오 경로"
         varchar thumbnail_path "썸네일 경로"
         int duration "영상 길이"
         varchar source_language "원본 언어"
@@ -99,7 +112,7 @@ erDiagram
     ai_translation_jobs {
         varchar id PK "번역 작업 ID"
         varchar video_job_id FK "영상 작업 ID"
-        enum stt_status "STT 상태"
+        enum stt_status "음성 인식 상태"
         enum translation_status "번역 상태"
         text error_message "오류 메시지"
         datetime started_at "시작 일시"
@@ -140,12 +153,11 @@ erDiagram
 **미디어 처리**
 
 ![yt-dlp](https://img.shields.io/badge/yt--dlp-111827?style=for-the-badge)
-![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=for-the-badge&logo=ffmpeg&logoColor=ffffff)
 
 **데이터 저장**
 
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=ffffff)
 ![File System](https://img.shields.io/badge/File_System-4B5563?style=for-the-badge)
-![JSON](https://img.shields.io/badge/JSON-111111?style=for-the-badge&logo=json&logoColor=ffffff)
 
 **기타**
 
@@ -171,12 +183,12 @@ erDiagram
 
 ## 외부 API/라이브러리 연동 및 주요 인프라 기능
 
-- **yt-dlp(유튜브 다운로더)**: YouTube URL을 받아 영상 정보 확인과 영상 다운로드 처리
-- **FFmpeg(영상/음성 변환 도구)**: 다운로드한 영상에서 썸네일 이미지와 음성 파일 추출
-- **AI STT API(음성 인식)**: `audio.mp3`를 원문 자막으로 변환
-- **AI Translation API(자막 번역)**: 원문 자막을 사용자가 선택한 언어로 번역
+- **yt-dlp(유튜브 다운로더)**: YouTube URL을 받아 프론트 재생용 영상과 음성 인식용 오디오 다운로드 처리
+- **ElevenLabs 음성 인식 API**: yt-dlp로 받은 오디오 파일을 원문 자막으로 변환
+- **Gemini Translation API(자막 번역)**: 원문 자막을 사용자가 선택한 언어로 번역
+- **MySQL 작업 저장소**: 영상 작업, 음성 인식/번역 작업, 자막 구간과 번역문 저장
 - **WaveSurfer.js(파형 기반 편집 도구)**: 오디오 파형, 자막 구간, 타임라인 기반 편집 UI 구성
-- **Express Static Data Serving**: `/data/jobs/{jobId}` 하위 영상, 썸네일, 자막 JSON 제공
+- **Express Static Data Serving**: `/data/jobs/{jobId}` 하위 다운로드 영상과 오디오 파일 제공
 
 ---
 
