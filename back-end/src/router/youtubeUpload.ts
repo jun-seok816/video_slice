@@ -20,9 +20,12 @@ type YoutubeUploadState = {
   targetLanguage: string;
   jobId: string;
   jobDir: string;
-  outputTemplate: string;
+  videoOutputTemplate: string;
+  audioOutputTemplate: string;
   videoPath: string;
   videoPublicPath: string;
+  audioPath: string;
+  audioPublicPath: string;
   fileSize: number;
   dbSaved: boolean;
 };
@@ -34,7 +37,7 @@ const DEFAULT_YTDLP_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let lastYtDlpUpdateCheckedAt = 0;
 let ytDlpUpdatePromise: Promise<void> | null = null;
 
-// res.locals에 저장한 현재 YouTube 업로드 작업 상태를 반환합니다.
+// 현재 YouTube 업로드 작업 상태를 가져옵니다.
 function getState(res: Response) {
   return res.locals.youtubeUpload as YoutubeUploadState;
 }
@@ -59,11 +62,6 @@ function toPublicDataPath(filePath: string) {
   return `/data/${path.relative(DATA_ROOT, filePath).split(path.sep).join("/")}`;
 }
 
-// 현재 환경에서 사용할 yt-dlp 실행 명령을 반환합니다.
-function getYtDlpBin() {
-  return process.env.YTDLP_BIN?.trim() || "yt-dlp";
-}
-
 // yt-dlp 실행 명령을 환경에 맞게 구성합니다.
 function getYtDlpSpawnCommand(args: string[]) {
   const configuredYtDlpBin = process.env.YTDLP_BIN?.trim();
@@ -83,7 +81,7 @@ function getYtDlpSpawnCommand(args: string[]) {
   }
 
   return {
-    command: getYtDlpBin(),
+    command: "yt-dlp",
     args,
   };
 }
@@ -151,9 +149,7 @@ function runProcess(command: string, args: string[]) {
 
 // Python pip를 통해 yt-dlp를 최신 버전으로 업데이트합니다.
 async function updateYtDlp() {
-  const pythonBin = getPythonBin();
-
-  await runProcess(pythonBin, ["-m", "pip", "install", "-U", "yt-dlp"]);
+  await runProcess(getPythonBin(), ["-m", "pip", "install", "-U", "yt-dlp"]);
 }
 
 // 설정된 주기마다 yt-dlp 자동 업데이트를 시도합니다.
@@ -209,20 +205,8 @@ function mapYtDlpErrorMessage(stderr: string) {
   return "yt-dlp 영상 다운로드에 실패했습니다.";
 }
 
-// yt-dlp 실행에 사용할 인자 목록을 구성합니다.
-function getYtDlpCommandArgs(outputTemplate: string, youtubeUrl: string) {
-  const args = [
-    "--no-playlist",
-    "-o",
-    outputTemplate,
-    "-f",
-    "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best",
-    "--merge-output-format",
-    "mp4",
-    "--print",
-    "after_move:filepath",
-  ];
-
+// yt-dlp 공통 옵션을 환경변수 기반으로 추가합니다.
+function appendYtDlpOptionalArgs(args: string[]) {
   const jsRuntime = process.env.YTDLP_JS_RUNTIMES?.trim();
   if (jsRuntime) {
     args.push("--js-runtimes", jsRuntime);
@@ -242,40 +226,154 @@ function getYtDlpCommandArgs(outputTemplate: string, youtubeUrl: string) {
   if (userAgent) {
     args.push("--user-agent", userAgent);
   }
+}
 
+// yt-dlp 영상 다운로드 인자 목록을 구성합니다.
+function getYtDlpVideoCommandArgs(outputTemplate: string, youtubeUrl: string) {
+  const args = [
+    "--no-playlist",
+    "-o",
+    outputTemplate,
+    "-f",
+    "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best",
+    "--merge-output-format",
+    "mp4",
+    "--print",
+    "after_move:filepath",
+  ];
+
+  appendYtDlpOptionalArgs(args);
   args.push(youtubeUrl);
 
   return args;
 }
 
-// yt-dlp가 출력한 경로 또는 작업 폴더에서 실제 다운로드된 영상 파일을 찾습니다.
-function getExistingYtDlpOutputPath(
+// yt-dlp 오디오 다운로드 인자 목록을 구성합니다.
+function getYtDlpAudioCommandArgs(outputTemplate: string, youtubeUrl: string) {
+  const args = [
+    "--no-playlist",
+    "-o",
+    outputTemplate,
+    "-f",
+    "ba[ext=m4a]/bestaudio[ext=m4a]/ba[ext=webm]/bestaudio",
+    "--print",
+    "after_move:filepath",
+  ];
+
+  appendYtDlpOptionalArgs(args);
+  args.push(youtubeUrl);
+
+  return args;
+}
+
+// yt-dlp 다운로드 프로세스를 실행하고 출력된 파일 경로 목록을 반환합니다.
+function runYtDlpDownload(req: Request, args: string[]) {
+  return new Promise<string[]>((resolve, reject) => {
+    const ytDlpCommand = getYtDlpSpawnCommand(args);
+    const ytDlpProcess = spawn(ytDlpCommand.command, ytDlpCommand.args, {
+      windowsHide: true,
+    });
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+
+    const abortHandler = () => {
+      ytDlpProcess.kill("SIGTERM");
+    };
+
+    req.on("aborted", abortHandler);
+
+    ytDlpProcess.stdout.on("data", (data: Buffer) => {
+      stdoutChunks.push(data.toString());
+    });
+
+    ytDlpProcess.stderr.on("data", (data: Buffer) => {
+      stderrChunks.push(data.toString());
+    });
+
+    ytDlpProcess.on("error", (err) => {
+      req.off("aborted", abortHandler);
+      reject(
+        Error(
+          `${ytDlpCommand.command} 실행에 실패했습니다. yt-dlp 설치 또는 PATH 설정을 확인해 주세요. (${err.message})`
+        )
+      );
+    });
+
+    ytDlpProcess.on("close", (code) => {
+      req.off("aborted", abortHandler);
+
+      if (code !== 0) {
+        const stderr = stderrChunks.join("");
+        reject(Error(`${mapYtDlpErrorMessage(stderr)} (code ${code})`));
+        return;
+      }
+
+      resolve(
+        stdoutChunks
+          .join("")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+      );
+    });
+  });
+}
+
+// yt-dlp가 출력한 경로 또는 작업 폴더에서 실제 다운로드 파일을 찾습니다.
+function getExistingYtDlpOutputPathByExt(
   dirPath: string,
-  printedPaths: string[]
+  printedPaths: string[],
+  fileBaseName: string,
+  extPriority: string[]
 ) {
   const existingPrintedPath = printedPaths.find((candidate) =>
     fs.existsSync(candidate)
   );
 
   if (existingPrintedPath) return existingPrintedPath;
-
   if (!fs.existsSync(dirPath)) return null;
-
-  const videoExtPriority = [".mp4", ".mkv", ".webm", ".mov"];
 
   return (
     fs
       .readdirSync(dirPath)
       .map((fileName) => path.join(dirPath, fileName))
       .filter((filePath) =>
-        videoExtPriority.includes(path.extname(filePath).toLowerCase())
+        path.basename(filePath).startsWith(`${fileBaseName}.`) &&
+        extPriority.includes(path.extname(filePath).toLowerCase())
       )
       .sort((a, b) => {
         const aExt = path.extname(a).toLowerCase();
         const bExt = path.extname(b).toLowerCase();
-        return videoExtPriority.indexOf(aExt) - videoExtPriority.indexOf(bExt);
+        return extPriority.indexOf(aExt) - extPriority.indexOf(bExt);
       })[0] ?? null
   );
+}
+
+// 작업 폴더에서 실제 다운로드된 영상 파일을 찾습니다.
+function getExistingYtDlpVideoOutputPath(
+  dirPath: string,
+  printedPaths: string[]
+) {
+  return getExistingYtDlpOutputPathByExt(dirPath, printedPaths, "video", [
+    ".mp4",
+    ".mkv",
+    ".webm",
+    ".mov",
+  ]);
+}
+
+// 작업 폴더에서 실제 다운로드된 오디오 파일을 찾습니다.
+function getExistingYtDlpAudioOutputPath(
+  dirPath: string,
+  printedPaths: string[]
+) {
+  return getExistingYtDlpOutputPathByExt(dirPath, printedPaths, "audio", [
+    ".m4a",
+    ".mp3",
+    ".webm",
+    ".opus",
+    ".wav",
+  ]);
 }
 
 // 요청 본문에서 YouTube URL과 언어 값을 검증하고 작업 상태를 초기화합니다.
@@ -319,12 +417,13 @@ function prepareDownloadFolder(
 
   state.jobId = jobId;
   state.jobDir = jobDir;
-  state.outputTemplate = path.join(jobDir, "video.%(ext)s");
+  state.videoOutputTemplate = path.join(jobDir, "video.%(ext)s");
+  state.audioOutputTemplate = path.join(jobDir, "audio.%(ext)s");
 
   next();
 }
 
-// yt-dlp 프로세스를 실행해 YouTube 영상을 작업 폴더에 다운로드합니다.
+// YouTube 영상을 작업 폴더에 다운로드합니다.
 async function downloadYoutubeVideo(
   req: Request,
   res: Response,
@@ -333,60 +432,11 @@ async function downloadYoutubeVideo(
   const state = getState(res);
 
   try {
-    const printedPaths = await new Promise<string[]>((resolve, reject) => {
-      const ytDlpCommand = getYtDlpSpawnCommand(
-        getYtDlpCommandArgs(state.outputTemplate, state.youtubeUrl)
-      );
-      const ytDlpProcess = spawn(ytDlpCommand.command, ytDlpCommand.args, {
-        windowsHide: true,
-      });
-      const stdoutChunks: string[] = [];
-      const stderrChunks: string[] = [];
-
-      const abortHandler = () => {
-        ytDlpProcess.kill("SIGTERM");
-      };
-
-      req.on("aborted", abortHandler);
-
-      ytDlpProcess.stdout.on("data", (data: Buffer) => {
-        stdoutChunks.push(data.toString());
-      });
-
-      ytDlpProcess.stderr.on("data", (data: Buffer) => {
-        stderrChunks.push(data.toString());
-      });
-
-      ytDlpProcess.on("error", (err) => {
-        req.off("aborted", abortHandler);
-        reject(
-          Error(
-            `${ytDlpCommand.command} 실행에 실패했습니다. yt-dlp 설치 또는 PATH 설정을 확인해 주세요. (${err.message})`
-          )
-        );
-      });
-
-      ytDlpProcess.on("close", (code) => {
-        req.off("aborted", abortHandler);
-
-        if (code !== 0) {
-          const stderr = stderrChunks.join("");
-          const error = new Error(`${mapYtDlpErrorMessage(stderr)} (code ${code})`);
-          reject(error);
-          return;
-        }
-
-        resolve(
-          stdoutChunks
-            .join("")
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0)
-        );
-      });
-    });
-
-    const videoPath = getExistingYtDlpOutputPath(state.jobDir, printedPaths);
+    const printedPaths = await runYtDlpDownload(
+      req,
+      getYtDlpVideoCommandArgs(state.videoOutputTemplate, state.youtubeUrl)
+    );
+    const videoPath = getExistingYtDlpVideoOutputPath(state.jobDir, printedPaths);
 
     if (videoPath === null) {
       throw Error("다운로드된 영상 파일을 찾을 수 없습니다.");
@@ -395,6 +445,34 @@ async function downloadYoutubeVideo(
     state.videoPath = videoPath;
     state.videoPublicPath = toPublicDataPath(videoPath);
     state.fileSize = fs.statSync(videoPath).size;
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ElevenLabs STT에 전달할 오디오 파일을 작업 폴더에 다운로드합니다.
+async function downloadYoutubeAudio(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const state = getState(res);
+
+  try {
+    const printedPaths = await runYtDlpDownload(
+      req,
+      getYtDlpAudioCommandArgs(state.audioOutputTemplate, state.youtubeUrl)
+    );
+    const audioPath = getExistingYtDlpAudioOutputPath(state.jobDir, printedPaths);
+
+    if (audioPath === null) {
+      throw Error("STT에 사용할 오디오 파일을 찾을 수 없습니다.");
+    }
+
+    state.audioPath = audioPath;
+    state.audioPublicPath = toPublicDataPath(audioPath);
 
     next();
   } catch (err) {
@@ -431,7 +509,7 @@ async function insertAiVideoJob(
         state.youtubeUrl,
         `YouTube video (${state.videoId})`,
         state.videoPublicPath,
-        null,
+        state.audioPublicPath,
         null,
         0,
         state.sourceLanguage,
@@ -461,13 +539,14 @@ function sendDownloadResult(req: Request, res: Response) {
       targetLanguage: state.targetLanguage,
       thumbnailUrl: `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`,
       videoPath: state.videoPublicPath,
+      audioPath: state.audioPublicPath,
       fileSize: state.fileSize,
       dbSaved: state.dbSaved,
     },
   });
 }
 
-// YouTube 업로드 라우터에서 발생한 오류를 공통 응답 형식으로 처리합니다.
+// YouTube 업로드 라우터 오류를 공통 응답 형식으로 처리합니다.
 function handleYoutubeUploadError(
   err: Error,
   req: Request,
@@ -488,6 +567,7 @@ router.post(
   prepareDownloadFolder,
   autoUpdateYtDlp,
   downloadYoutubeVideo,
+  downloadYoutubeAudio,
   insertAiVideoJob,
   sendDownloadResult
 );

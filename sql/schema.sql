@@ -48,8 +48,6 @@ CREATE TABLE IF NOT EXISTS ai_translation_jobs (
     'completed',
     'failed'
   ) NOT NULL DEFAULT 'pending' COMMENT '번역 상태',
-  prompt TEXT NULL COMMENT 'STT/번역 참고 프롬프트',
-  proper_nouns JSON NULL COMMENT '고유명사 목록',
   error_message TEXT NULL COMMENT '오류 메시지',
   started_at DATETIME NULL COMMENT '시작 일시',
   completed_at DATETIME NULL COMMENT '완료 일시',

@@ -7,6 +7,23 @@ type YoutubeUploadModalProps = {
   onClose: () => void;
 };
 
+type YoutubeUploadResponse = {
+  err?: boolean;
+  message?: string;
+  data?: {
+    jobId?: string;
+    videoPath?: string;
+  };
+};
+
+type SttResponse = {
+  err?: boolean;
+  message?: string;
+  data?: {
+    subtitleCount?: number;
+  };
+};
+
 export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("KOR");
@@ -22,30 +39,55 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
     if (isSubmitting) return;
 
     setIsSubmitting(true);
-    setMessage("");
+    setMessage("YouTube 영상을 다운로드하는 중입니다.");
 
     try {
-      const response = await axios.post("/upload/youtube-url", {
-        youtubeUrl,
-        sourceLanguage,
-        targetLanguage,
-      });
+      const uploadResponse = await axios.post<YoutubeUploadResponse>(
+        "/upload/youtube-url",
+        {
+          youtubeUrl,
+          sourceLanguage,
+          targetLanguage,
+        }
+      );
 
-      if (response.data?.err) {
-        throw Error(response.data.message || "YouTube 영상 다운로드에 실패했습니다.");
+      if (uploadResponse.data?.err) {
+        throw Error(
+          uploadResponse.data.message || "YouTube 영상 다운로드에 실패했습니다."
+        );
       }
 
-      const videoPath = response.data?.data?.videoPath;
+      const jobId = uploadResponse.data?.data?.jobId;
+
+      if (!jobId) {
+        throw Error("STT를 수행할 작업 ID를 받지 못했습니다.");
+      }
+
+      setMessage("영상 다운로드가 완료되었습니다. 음성 인식(STT)을 진행하는 중입니다.");
+
+      const sttResponse = await axios.post<SttResponse>("/stt/elevenlabs", {
+        jobId,
+      });
+
+      if (sttResponse.data?.err) {
+        throw Error(
+          sttResponse.data.message || "음성 인식(STT)에 실패했습니다."
+        );
+      }
+
+      const subtitleCount = sttResponse.data?.data?.subtitleCount;
       setMessage(
-        videoPath
-          ? `YouTube 영상 다운로드가 완료되었습니다. (${videoPath})`
-          : "YouTube 영상 다운로드가 완료되었습니다."
+        typeof subtitleCount === "number"
+          ? `영상 다운로드와 음성 인식이 완료되었습니다. 생성된 자막: ${subtitleCount}개`
+          : "영상 다운로드와 음성 인식이 완료되었습니다."
       );
     } catch (err) {
-      const fallbackMessage = "YouTube 영상 다운로드에 실패했습니다.";
+      const fallbackMessage = "YouTube 영상 처리에 실패했습니다.";
 
       if (axios.isAxiosError(err)) {
         setMessage(err.response?.data?.message || fallbackMessage);
+      } else if (err instanceof Error) {
+        setMessage(err.message || fallbackMessage);
       } else {
         setMessage(fallbackMessage);
       }
@@ -144,7 +186,7 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
             className="youtube-upload-modal__primary"
             disabled={isSubmitting || youtubeUrl.trim().length === 0}
           >
-            {isSubmitting ? "다운로드 중" : "불러오기"}
+            {isSubmitting ? "처리 중" : "불러오기"}
           </button>
         </div>
       </form>
