@@ -64,13 +64,14 @@ sequenceDiagram
 
 ## 시연 영상
 
-AI 영상 번역 기능 구현 후 추가 예정입니다.
+<img width="1152" height="648" alt="download (2)" src="https://github.com/user-attachments/assets/5746a6e3-81bf-466a-9081-271728fde9df" />
+
 
 ---
 
 ## 시연 사이트
 
-구현 후 배포 URL 추가 예정입니다.
+http://221.154.120.167:3000/
 
 ---
 
