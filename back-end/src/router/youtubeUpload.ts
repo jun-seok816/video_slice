@@ -266,7 +266,7 @@ function getYtDlpVideoCommandArgs(outputTemplate: string, youtubeUrl: string) {
     "-o",
     outputTemplate,
     "-f",
-    "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best",
+    "best[ext=mp4][acodec!=none]/best[acodec!=none]/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/best",
     "--merge-output-format",
     "mp4",
     "--print",
