@@ -4,10 +4,10 @@ import bodyParser from "body-parser";
 import path from "path";
 import mysql, { Connection,Pool } from "mysql2";
 import session from "express-session";
-var MySQLStore = require("express-mysql-session")(session);
 import cookieParser from "cookie-parser";
 import dotenv from 'dotenv';
 import youtubeUpload from "./router/youtubeUpload";
+import { closeDbPool } from "./db";
 
 // .env 파일에서 환경 변수 로드
 dotenv.config();
@@ -40,16 +40,6 @@ declare module 'express-serve-static-core' {
   }
 }
 
-const gf_cs = (req: Request, res: Response, next: NextFunction)=>{
-   // 세션에 userId가 없을 경우
-   if (!req.session || !req.session.user) {
-    // 세션이 존재하지 않을 때
-    res.status(401).send('Unauthorized: No session available');
-  } else {
-    // 세션이 존재하면 다음 미들웨어로 넘어갑니다
-    next();
-  }
-}
 
 //https://expressjs.com/ko/starter/static-files.html s
 app.set("puplic", path.join(__dirname, "../build"));
@@ -98,7 +88,22 @@ console.log(
 
 const server = app.listen(3000, () => {
   console.log(`Example app listening on port ${3000}`);
-}).setTimeout(12000000);
+});
+
+const shutdown = async () => {
+  server.close(async () => {
+    await closeDbPool();
+    process.exit(0);
+  });
+};
+
+process.on("SIGINT", () => {
+  void shutdown();
+});
+
+process.on("SIGTERM", () => {
+  void shutdown();
+});
 
 server.keepAliveTimeout = 300; // Keep-Alive 연결 제한 시간
 server.headersTimeout = 11000; // 헤더 대기 시간

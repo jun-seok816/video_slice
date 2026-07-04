@@ -129,11 +129,6 @@ out
 .yarn/install-state.gz
 .pnp.*
 
-#ServerSetting
-back-end/src/db.ts
-back-end/dist/db.js
-back-end/dist/db.js.map
-
 #mp4
 *.mp4
 
