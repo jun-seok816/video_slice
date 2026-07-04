@@ -3,6 +3,7 @@ import express, { NextFunction, Request, Response } from "express";
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
+import { dbPool } from "../db";
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ type YoutubeUploadState = {
   videoPath: string;
   videoPublicPath: string;
   fileSize: number;
+  dbSaved: boolean;
 };
 
 const DATA_ROOT = path.resolve(__dirname, "../../../data");
@@ -400,6 +402,51 @@ async function downloadYoutubeVideo(
   }
 }
 
+// 다운로드가 끝난 영상 작업 정보를 ai_video_jobs 테이블에 저장합니다.
+async function insertAiVideoJob(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const state = getState(res);
+
+  try {
+    await dbPool.execute(
+      `
+      INSERT INTO ai_video_jobs (
+        id,
+        youtube_url,
+        title,
+        video_path,
+        audio_path,
+        thumbnail_path,
+        duration,
+        source_language,
+        target_language,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        state.jobId,
+        state.youtubeUrl,
+        `YouTube video (${state.videoId})`,
+        state.videoPublicPath,
+        null,
+        null,
+        0,
+        state.sourceLanguage,
+        state.targetLanguage,
+        "download_ready",
+      ]
+    );
+
+    state.dbSaved = true;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 // 다운로드 결과를 프론트엔드에 반환합니다.
 function sendDownloadResult(req: Request, res: Response) {
   const state = getState(res);
@@ -415,6 +462,7 @@ function sendDownloadResult(req: Request, res: Response) {
       thumbnailUrl: `https://img.youtube.com/vi/${state.videoId}/mqdefault.jpg`,
       videoPath: state.videoPublicPath,
       fileSize: state.fileSize,
+      dbSaved: state.dbSaved,
     },
   });
 }
@@ -440,6 +488,7 @@ router.post(
   prepareDownloadFolder,
   autoUpdateYtDlp,
   downloadYoutubeVideo,
+  insertAiVideoJob,
   sendDownloadResult
 );
 
