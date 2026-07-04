@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import express, { NextFunction, Request, Response } from "express";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { dbPool } from "../db";
@@ -29,6 +30,8 @@ type YoutubeUploadState = {
   fileSize: number;
   dbSaved: boolean;
 };
+
+type YtDlpUpdateMethod = "pipx" | "pip";
 
 const DATA_ROOT = path.resolve(__dirname, "../../../data");
 const JOBS_ROOT = path.join(DATA_ROOT, "jobs");
@@ -62,6 +65,13 @@ function toPublicDataPath(filePath: string) {
   return `/data/${path.relative(DATA_ROOT, filePath).split(path.sep).join("/")}`;
 }
 
+// pipx로 설치된 yt-dlp는 PM2/systemd PATH에 잡히지 않는 경우가 많습니다.
+function getPipxYtDlpBin() {
+  if (process.platform === "win32") return "";
+
+  return path.join(os.homedir(), ".local", "bin", "yt-dlp");
+}
+
 // yt-dlp 실행 명령을 환경에 맞게 구성합니다.
 function getYtDlpSpawnCommand(args: string[]) {
   const configuredYtDlpBin = process.env.YTDLP_BIN?.trim();
@@ -77,6 +87,14 @@ function getYtDlpSpawnCommand(args: string[]) {
     return {
       command: getPythonBin(),
       args: ["-m", "yt_dlp", ...args],
+    };
+  }
+
+  const pipxYtDlpBin = getPipxYtDlpBin();
+  if (pipxYtDlpBin && fs.existsSync(pipxYtDlpBin)) {
+    return {
+      command: pipxYtDlpBin,
+      args,
     };
   }
 
@@ -96,7 +114,15 @@ function getPythonBin() {
 
 // yt-dlp 자동 업데이트 기능을 사용할지 판단합니다.
 function shouldAutoUpdateYtDlp() {
-  return process.env.YTDLP_AUTO_UPDATE !== "false";
+  return process.env.YTDLP_AUTO_UPDATE === "true";
+}
+
+// yt-dlp 업데이트 방식을 반환합니다.
+function getYtDlpUpdateMethod(): YtDlpUpdateMethod {
+  const updateMethod = process.env.YTDLP_UPDATE_METHOD?.trim().toLowerCase();
+
+  if (updateMethod === "pip") return "pip";
+  return "pipx";
 }
 
 // yt-dlp 자동 업데이트 확인 주기를 반환합니다.
@@ -147,9 +173,14 @@ function runProcess(command: string, args: string[]) {
   });
 }
 
-// Python pip를 통해 yt-dlp를 최신 버전으로 업데이트합니다.
+// 선택된 패키지 관리 도구를 통해 yt-dlp를 최신 버전으로 업데이트합니다.
 async function updateYtDlp() {
-  await runProcess(getPythonBin(), ["-m", "pip", "install", "-U", "yt-dlp"]);
+  if (getYtDlpUpdateMethod() === "pip") {
+    await runProcess(getPythonBin(), ["-m", "pip", "install", "-U", "yt-dlp"]);
+    return;
+  }
+
+  await runProcess("pipx", ["upgrade", "yt-dlp"]);
 }
 
 // 설정된 주기마다 yt-dlp 자동 업데이트를 시도합니다.
@@ -294,7 +325,7 @@ function runYtDlpDownload(req: Request, args: string[]) {
       req.off("aborted", abortHandler);
       reject(
         Error(
-          `${ytDlpCommand.command} 실행에 실패했습니다. yt-dlp 설치 또는 PATH 설정을 확인해 주세요. (${err.message})`
+          `${ytDlpCommand.command} 실행에 실패했습니다. yt-dlp 설치, PATH, 또는 YTDLP_BIN 설정을 확인해 주세요. pipx로 설치했다면 YTDLP_BIN=${getPipxYtDlpBin()} 값을 사용할 수 있습니다. (${err.message})`
         )
       );
     });

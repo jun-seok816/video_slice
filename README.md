@@ -177,3 +177,27 @@ erDiagram
 - **AI Translation API(자막 번역)**: 원문 자막을 사용자가 선택한 언어로 번역
 - **WaveSurfer.js(파형 기반 편집 도구)**: 오디오 파형, 자막 구간, 타임라인 기반 편집 UI 구성
 - **Express Static Data Serving**: `/data/jobs/{jobId}` 하위 영상, 썸네일, 자막 JSON 제공
+
+---
+
+## yt-dlp 서버 설정
+
+서버에서는 시스템 Python에 `pip install -U yt-dlp`를 직접 실행하지 않는 것을 기본값으로 둡니다. Debian/Ubuntu 계열은 특정 정책으로 시스템 Python 환경이 보호될 수 있으므로, 운영 서버에서는 `pipx install yt-dlp` 방식이 권장됩니다.
+
+```bash
+pipx install yt-dlp
+```
+
+pipx 실행 파일 경로가 PM2 또는 systemd의 `PATH`에 잡히지 않으면 `.env`에 명시합니다.
+
+```env
+YTDLP_BIN=/home/joon/.local/bin/yt-dlp
+YTDLP_AUTO_UPDATE=false
+```
+
+자동 업데이트가 꼭 필요하면 명시적으로 켭니다. 기본 업데이트 방식은 `pipx upgrade yt-dlp`입니다.
+
+```env
+YTDLP_AUTO_UPDATE=true
+YTDLP_UPDATE_METHOD=pipx
+```
