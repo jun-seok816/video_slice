@@ -43,13 +43,16 @@ export default function C_Main() {
         window.gv_videotag.addEventListener("pause", window.gm_forceRender);
         window.gv_videotag.addEventListener("play", window.gm_forceRender);
       }
-      lv_Obj.pt_Wavesurfer = new WaveForm();
-      lv_Obj.pt_Wavesurfer.im_getWaveInfo();
-      lv_Obj.pt_Wavesurfer.im_addWaveSurferEvent();
-      lv_Obj.pt_Wavesurfer.pt_wavesurfer.zoom(
-        window.gv_waveRange
-      );
-      lv_Obj.im_load_save();
+
+      if (!lv_Obj.pt_Wavesurfer) {
+        lv_Obj.pt_Wavesurfer = new WaveForm();
+        lv_Obj.pt_Wavesurfer.im_getWaveInfo();
+        lv_Obj.pt_Wavesurfer.im_addWaveSurferEvent();
+        lv_Obj.pt_Wavesurfer.pt_wavesurfer.zoom(window.gv_waveRange);
+        lv_Obj.im_load_save();
+      } else {
+        lv_Obj.pt_Wavesurfer.im_getWaveInfo();
+      }
     }
 
     return () => {
@@ -83,7 +86,13 @@ export default function C_Main() {
               id="main_dic"
               className="Editstyled__PreviewWrapper-sc-1oegqb0-4 gEGicz"
             >
-              <VideoPlayer lv_Obj={lv_Obj} videoRef={videoRef} />
+              <VideoPlayer
+                lv_Obj={lv_Obj}
+                videoRef={videoRef}
+                onVideoLoaded={() => {
+                  lv_Obj.im_applyPendingAiVideoTimecodes();
+                }}
+              />
             </div>
           </section>
           <div className="FooterControlsstyled__Controls-sc-1jpytqp-0 ezyhkC">
@@ -96,6 +105,13 @@ export default function C_Main() {
       <YoutubeUploadModal
         isOpen={isYoutubeUploadOpen}
         onClose={() => setIsYoutubeUploadOpen(false)}
+        onVideoSelected={({ videoSrc, subtitles }) => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+          }
+          lv_Obj.im_selectAiVideo(videoSrc, subtitles);
+          setIsYoutubeUploadOpen(false);
+        }}
       />
     </section>
   );

@@ -4,6 +4,7 @@ import React from "react";
 export default function VideoPlayer(props: {
   lv_Obj: Main_editor;
   videoRef: React.MutableRefObject<HTMLVideoElement | null>;
+  onVideoLoaded?: () => void;
 }) {
   return (
     <div
@@ -14,10 +15,11 @@ export default function VideoPlayer(props: {
         <video
           onLoadedMetadata={() => {
             props.lv_Obj.iv_videoReady = true;
+            props.onVideoLoaded?.();
             props.lv_Obj.im_forceRender();
           }}
           ref={props.videoRef}
-          src={`${window.origin}/data/J1R0WvHh7muKBWspTSnT1VKTn6Qo6J_21.mp4`}
+          src={props.lv_Obj.pt_videoSrc}
           id="main_video"
           controls={false}
           style={{ width: "100vh", margin: "0 auto", maxHeight: "600px" }}

@@ -11,6 +11,8 @@ export class Main_editor extends Main implements I_timecode_items {
   private iv_Wavesurfer: WaveForm | undefined;
   private iv_TimeCode: TimeCode | undefined;
   private iv_Devide: Devide;
+  private iv_videoSrc: string;
+  private iv_pendingTimecodes: TimeCode[] | null;
 
   public iv_videoReady: boolean;
   public iv_tourStart: boolean;
@@ -22,6 +24,8 @@ export class Main_editor extends Main implements I_timecode_items {
     this.iv_Wavesurfer = undefined;
     this.iv_TimeCode = undefined;
     this.iv_Devide = new Devide();
+    this.iv_videoSrc = `${window.origin}/data/J1R0WvHh7muKBWspTSnT1VKTn6Qo6J_21.mp4`;
+    this.iv_pendingTimecodes = null;
   }
 
   public get pt_Wavesurfer(): WaveForm | undefined {
@@ -30,6 +34,10 @@ export class Main_editor extends Main implements I_timecode_items {
 
   public get pt_Devide(): Devide {
     return this.iv_Devide;
+  }
+
+  public get pt_videoSrc(): string {
+    return this.iv_videoSrc;
   }
 
   public set pt_Wavesurfer(p_wavesurfer: WaveForm | undefined) {
@@ -169,6 +177,41 @@ export class Main_editor extends Main implements I_timecode_items {
       Main.im_toast("불러오기 실패", "error");
       this.im_forceRender();
     }
+  }
+
+  public im_replaceTimecodes(timecodes: TimeCode[]) {
+    if (!this.pt_Wavesurfer) return;
+
+    const regionMap = new Map<string, TimeCode>();
+
+    timecodes.forEach((timecode) => {
+      regionMap.set(timecode.id, timecode);
+    });
+
+    this.pt_Wavesurfer.im_resetAll();
+    this.pt_Wavesurfer.setRegionsData(regionMap);
+    this.im_forceRender();
+  }
+
+  public im_selectAiVideo(videoSrc: string, subtitles: TimeCode[]) {
+    if (videoSrc === this.iv_videoSrc && this.pt_Wavesurfer) {
+      this.im_replaceTimecodes(subtitles);
+      return;
+    }
+
+    this.iv_pendingTimecodes = subtitles;
+    this.iv_videoReady = false;
+    this.pt_Wavesurfer?.im_resetAll();
+    this.iv_videoSrc = videoSrc;
+    this.im_forceRender();
+  }
+
+  public im_applyPendingAiVideoTimecodes() {
+    if (!this.pt_Wavesurfer || !this.iv_pendingTimecodes) return;
+
+    this.pt_Wavesurfer.im_getWaveInfo();
+    this.im_replaceTimecodes(this.iv_pendingTimecodes);
+    this.iv_pendingTimecodes = null;
   }
 
   public im_nextAddButtonClicked(p_timecode: TimeCode): void {

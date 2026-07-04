@@ -32,6 +32,33 @@ type SubtitleRow = RowDataPacket & {
   sort_order: number;
 };
 
+type TimeCodeSubtitleRow = RowDataPacket & {
+  id: string;
+  source_text: string;
+  translated_text: string | null;
+  start_time: string | number;
+  end_time: string | number;
+  sort_order: number;
+};
+
+type CompletedTranslationJobRow = RowDataPacket & {
+  translation_job_id: string;
+  video_job_id: string;
+  youtube_url: string;
+  title: string;
+  video_path: string;
+  audio_path: string | null;
+  thumbnail_path: string | null;
+  source_language: string;
+  target_language: string;
+  stt_status: string;
+  translation_status: string;
+  subtitle_count: number | string;
+  started_at: string | Date | null;
+  completed_at: string | Date | null;
+  created_at: string | Date;
+};
+
 type TranslatedSubtitle = {
   id: string;
   translatedText: string;
@@ -441,6 +468,174 @@ function sendTranslationResult(req: Request, res: Response) {
   });
 }
 
+// DB 자막 데이터를 기존 에디터 JSON과 같은 TimeCode 배열로 반환합니다.
+// 완료된 번역 작업 목록을 리스트 화면에서 사용할 수 있는 형태로 반환합니다.
+async function sendCompletedTranslationJobs(req: Request, res: Response) {
+  const limit = getLimitedQueryNumber(req.query.limit, 50, 100);
+  const offset = getOffsetQueryNumber(req.query.offset);
+
+  try {
+    const [rows] = await dbPool.execute<CompletedTranslationJobRow[]>(
+      `
+      SELECT
+        tj.id AS translation_job_id,
+        tj.video_job_id,
+        tj.stt_status,
+        tj.translation_status,
+        tj.started_at,
+        tj.completed_at,
+        vj.youtube_url,
+        vj.title,
+        vj.video_path,
+        vj.audio_path,
+        vj.thumbnail_path,
+        vj.source_language,
+        vj.target_language,
+        vj.created_at,
+        (
+          SELECT COUNT(*)
+          FROM ai_subtitle_items si
+          WHERE si.translation_job_id = tj.id
+        ) AS subtitle_count
+      FROM ai_translation_jobs tj
+      INNER JOIN ai_video_jobs vj ON vj.id = tj.video_job_id
+      WHERE tj.translation_status = ?
+      ORDER BY tj.completed_at DESC, tj.started_at DESC      
+      `,
+      ["completed"]
+    );
+
+    res.send({
+      err: false,
+      data: {
+        items: rows.map((row) => ({
+          translationJobId: row.translation_job_id,
+          jobId: row.video_job_id,
+          youtubeUrl: row.youtube_url,
+          title: row.title,
+          videoPath: row.video_path,
+          audioPath: row.audio_path,
+          thumbnailPath: row.thumbnail_path,
+          thumbnailUrl: getYoutubeThumbnailUrl(row.youtube_url, row.thumbnail_path),
+          sourceLanguage: row.source_language,
+          targetLanguage: row.target_language,
+          sttStatus: row.stt_status,
+          translationStatus: row.translation_status,
+          subtitleCount: Number(row.subtitle_count),
+          startedAt: row.started_at,
+          completedAt: row.completed_at,
+          createdAt: row.created_at,
+        })),
+        limit,
+        offset,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      err: true,
+      message: "완료된 번역 작업 목록 조회에 실패했습니다.",
+    });
+  }
+}
+
+function getLimitedQueryNumber(
+  value: unknown,
+  defaultValue: number,
+  maxValue: number
+) {
+  const parsed =
+    typeof value === "string" && value.trim().length > 0
+      ? Number(value)
+      : defaultValue;
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return defaultValue;
+  }
+
+  return Math.min(Math.floor(parsed), maxValue);
+}
+
+function getOffsetQueryNumber(value: unknown) {
+  const parsed =
+    typeof value === "string" && value.trim().length > 0 ? Number(value) : 0;
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  return Math.floor(parsed);
+}
+
+function getYoutubeThumbnailUrl(youtubeUrl: string, thumbnailPath: string | null) {
+  if (thumbnailPath) return thumbnailPath;
+
+  const videoId = getYoutubeVideoId(youtubeUrl);
+
+  return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
+}
+
+function getYoutubeVideoId(youtubeUrl: string) {
+  const matched = youtubeUrl.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([^&?/]+)/
+  );
+
+  return matched?.[1] || "";
+}
+
+async function sendTimeCodeSubtitles(req: Request, res: Response) {
+  const jobId = typeof req.query.jobId === "string" ? req.query.jobId.trim() : "";
+  const translationJobId =
+    typeof req.query.translationJobId === "string"
+      ? req.query.translationJobId.trim()
+      : "";
+
+  if (jobId.length === 0 && translationJobId.length === 0) {
+    res.status(400).send({
+      err: true,
+      message: "자막을 조회할 작업 ID가 필요합니다.",
+    });
+    return;
+  }
+
+  try {
+    const params = translationJobId ? [translationJobId] : [jobId];
+    const whereClause = translationJobId
+      ? "translation_job_id = ?"
+      : "video_job_id = ?";
+    const [rows] = await dbPool.execute<TimeCodeSubtitleRow[]>(
+      `
+      SELECT
+        id,
+        source_text,
+        translated_text,
+        start_time,
+        end_time,
+        sort_order
+      FROM ai_subtitle_items
+      WHERE ${whereClause}
+      ORDER BY sort_order ASC
+      `,
+      params
+    );
+
+    res.send(
+      rows.map((row) => ({
+        id: row.id,
+        text: row.translated_text || row.source_text,
+        sTime: Number(row.start_time),
+        eTime: Number(row.end_time),
+      }))
+    );
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({
+      err: true,
+      message: "자막 조회에 실패했습니다.",
+    });
+  }
+}
+
 // 번역 실패 시 DB 작업 상태를 failed로 변경합니다.
 async function handleTranslationError(
   err: Error,
@@ -494,6 +689,9 @@ router.post(
   saveTranslatedText,
   sendTranslationResult
 );
+
+router.get("/completed", sendCompletedTranslationJobs);
+router.get("/subtitles", sendTimeCodeSubtitles);
 
 router.use(handleTranslationError);
 

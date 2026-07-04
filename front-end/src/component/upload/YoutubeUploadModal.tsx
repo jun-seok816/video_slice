@@ -1,10 +1,15 @@
+import { TimeCode } from "@BackEnd/src/class/Timecode";
 import axios from "axios";
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import "./YoutubeUploadModal.scss";
 
 type YoutubeUploadModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  onVideoSelected: (payload: {
+    videoSrc: string;
+    subtitles: TimeCode[];
+  }) => void;
 };
 
 type YoutubeUploadResponse = {
@@ -33,14 +38,88 @@ type TranslationResponse = {
   };
 };
 
+type CompletedJob = {
+  translationJobId: string;
+  jobId: string;
+  youtubeUrl: string;
+  title: string;
+  videoPath: string;
+  thumbnailUrl: string | null;
+  sourceLanguage: string;
+  targetLanguage: string;
+  subtitleCount: number;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+type CompletedJobsResponse = {
+  err?: boolean;
+  message?: string;
+  data?: {
+    items?: CompletedJob[];
+  };
+};
+
+type SubtitleResponseItem = {
+  id: string;
+  text: string;
+  sTime: number;
+  eTime: number;
+};
+
 export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("KOR");
   const [targetLanguage, setTargetLanguage] = useState("ENG");
+  const [uploadDate, setUploadDate] = useState("");
+  const [completedJobs, setCompletedJobs] = useState<CompletedJob[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isListLoading, setIsListLoading] = useState(false);
   const [message, setMessage] = useState("");
 
+  useEffect(() => {
+    if (!props.isOpen) return;
+
+    fetchCompletedJobs();
+  }, [props.isOpen]);
+
+  const filteredCompletedJobs = useMemo(() => {
+    if (!uploadDate) return completedJobs;
+
+    return completedJobs.filter(
+      (job) => getDateInputValue(job.createdAt) === uploadDate
+    );
+  }, [completedJobs, uploadDate]);
+
   if (!props.isOpen) return null;
+
+  async function fetchCompletedJobs() {
+    setIsListLoading(true);
+
+    try {
+      const response = await axios.get<CompletedJobsResponse>(
+        "/translation/completed",
+        {
+          params: {
+            limit: 100,
+          },
+        }
+      );
+
+      if (response.data?.err) {
+        throw Error(
+          response.data.message || "완료된 번역 작업 목록을 불러오지 못했습니다."
+        );
+      }
+
+      setCompletedJobs(response.data?.data?.items || []);
+    } catch (err) {
+      setMessage(getErrorMessage(err, "완료된 번역 작업 목록을 불러오지 못했습니다."));
+    } finally {
+      setIsListLoading(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,16 +151,14 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
         throw Error("STT를 수행할 작업 ID를 받지 못했습니다.");
       }
 
-      setMessage("영상 다운로드가 완료되었습니다. 음성 인식(STT)을 진행하는 중입니다.");
+      setMessage("영상 다운로드가 완료되었습니다. 음성 인식을 진행하는 중입니다.");
 
       const sttResponse = await axios.post<SttResponse>("/stt/elevenlabs", {
         jobId,
       });
 
       if (sttResponse.data?.err) {
-        throw Error(
-          sttResponse.data.message || "음성 인식(STT)에 실패했습니다."
-        );
+        throw Error(sttResponse.data.message || "음성 인식에 실패했습니다.");
       }
 
       const translationJobId = sttResponse.data?.data?.translationJobId;
@@ -93,8 +170,8 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
       const subtitleCount = sttResponse.data?.data?.subtitleCount;
       setMessage(
         typeof subtitleCount === "number"
-          ? `음성 인식이 완료되었습니다. 생성된 자막: ${subtitleCount}개. 번역을 진행하는 중입니다.`
-          : "음성 인식이 완료되었습니다. 번역을 진행하는 중입니다."
+          ? `음성 인식이 완료되었습니다. 생성된 자막 ${subtitleCount}개를 번역하는 중입니다.`
+          : "음성 인식이 완료되었습니다. 자막을 번역하는 중입니다."
       );
 
       const translationResponse = await axios.post<TranslationResponse>(
@@ -105,29 +182,55 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
       );
 
       if (translationResponse.data?.err) {
-        throw Error(
-          translationResponse.data.message || "자막 번역에 실패했습니다."
-        );
+        throw Error(translationResponse.data.message || "자막 번역에 실패했습니다.");
       }
 
       const translatedCount = translationResponse.data?.data?.translatedCount;
       setMessage(
         typeof translatedCount === "number"
-          ? `영상 다운로드, 음성 인식, 번역이 완료되었습니다. 번역된 자막: ${translatedCount}개`
-          : "영상 다운로드, 음성 인식, 번역이 완료되었습니다."
+          ? `영상 처리와 번역이 완료되었습니다. 번역된 자막: ${translatedCount}개`
+          : "영상 처리와 번역이 완료되었습니다."
       );
+      setYoutubeUrl("");
+      await fetchCompletedJobs();
     } catch (err) {
-      const fallbackMessage = "YouTube 영상 처리에 실패했습니다.";
-
-      if (axios.isAxiosError(err)) {
-        setMessage(err.response?.data?.message || fallbackMessage);
-      } else if (err instanceof Error) {
-        setMessage(err.message || fallbackMessage);
-      } else {
-        setMessage(fallbackMessage);
-      }
+      setMessage(getErrorMessage(err, "YouTube 영상 처리에 실패했습니다."));
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleCompletedJobClick(job: CompletedJob) {
+    if (selectedJobId === job.translationJobId) return;
+
+    setSelectedJobId(job.translationJobId);
+    setMessage("선택한 영상의 자막을 불러오는 중입니다.");
+
+    try {
+      const response = await axios.get<SubtitleResponseItem[]>(
+        "/translation/subtitles",
+        {
+          params: {
+            translationJobId: job.translationJobId,
+          },
+        }
+      );
+
+      if (!Array.isArray(response.data)) {
+        throw Error("자막 응답 형식이 올바르지 않습니다.");
+      }
+
+      const subtitles = response.data.map(
+        (item) => new TimeCode(item.text, Number(item.sTime), Number(item.eTime), item.id)
+      );
+
+      props.onVideoSelected({
+        videoSrc: toDataUrl(job.videoPath),
+        subtitles,
+      });
+    } catch (err) {
+      setMessage(getErrorMessage(err, "선택한 영상의 자막을 불러오지 못했습니다."));
+      setSelectedJobId("");
     }
   }
 
@@ -161,6 +264,69 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
         </div>
 
         <div className="youtube-upload-modal__body">
+          <section className="youtube-upload-modal__completed">
+            <div className="youtube-upload-modal__section-header">
+              <div>
+                <h3>완료된 번역 영상</h3>
+                <span>{filteredCompletedJobs.length}개</span>
+              </div>
+              <button
+                type="button"
+                className="youtube-upload-modal__refresh"
+                onClick={fetchCompletedJobs}
+                disabled={isListLoading}
+                aria-label="목록 새로고침"
+              >
+                <i className="bi bi-arrow-clockwise"></i>
+              </button>
+            </div>
+
+            <label className="youtube-upload-modal__field">
+              <span>업로드 날짜</span>
+              <input
+                type="date"
+                value={uploadDate}
+                onChange={(event) => setUploadDate(event.target.value)}
+              />
+            </label>
+
+            <div className="youtube-upload-modal__list">
+              {isListLoading && (
+                <p className="youtube-upload-modal__empty">목록을 불러오는 중입니다.</p>
+              )}
+
+              {!isListLoading && filteredCompletedJobs.length === 0 && (
+                <p className="youtube-upload-modal__empty">
+                  선택한 날짜에 완료된 영상이 없습니다.
+                </p>
+              )}
+
+              {!isListLoading &&
+                filteredCompletedJobs.map((job) => (
+                  <button
+                    key={job.translationJobId}
+                    type="button"
+                    className="youtube-upload-modal__list-item"
+                    onClick={() => handleCompletedJobClick(job)}
+                    disabled={selectedJobId === job.translationJobId}
+                  >
+                    {job.thumbnailUrl && (
+                      <img src={job.thumbnailUrl} alt="" loading="lazy" />
+                    )}
+                    <span>
+                      <strong>{job.title || "제목 없음"}</strong>
+                      <small>
+                        {getDateLabel(job.createdAt)} · 자막 {job.subtitleCount}개 ·{" "}
+                        {job.sourceLanguage} → {job.targetLanguage}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </section>
+
+          <div className="youtube-upload-modal__divider"></div>
+
           <label className="youtube-upload-modal__field">
             <span>영상 URL</span>
             <div className="youtube-upload-modal__input-row">
@@ -227,4 +393,38 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
       </form>
     </div>
   );
+}
+
+function toDataUrl(filePath: string) {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const dataIndex = normalizedPath.lastIndexOf("/data/");
+
+  if (normalizedPath.startsWith("http")) return normalizedPath;
+  if (normalizedPath.startsWith("/data/")) return `${window.origin}${normalizedPath}`;
+  if (dataIndex >= 0) return `${window.origin}${normalizedPath.slice(dataIndex)}`;
+
+  return normalizedPath;
+}
+
+function getDateInputValue(value: string) {
+  const matched = value.match(/\d{4}-\d{2}-\d{2}/);
+  return matched?.[0] || "";
+}
+
+function getDateLabel(value: string) {
+  const dateValue = getDateInputValue(value);
+  return dateValue || "날짜 없음";
+}
+
+function getErrorMessage(err: unknown, fallbackMessage: string) {
+  if (axios.isAxiosError(err)) {
+    const responseMessage = err.response?.data?.message;
+    return typeof responseMessage === "string" ? responseMessage : fallbackMessage;
+  }
+
+  if (err instanceof Error) {
+    return err.message || fallbackMessage;
+  }
+
+  return fallbackMessage;
 }
