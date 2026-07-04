@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import dotenv from 'dotenv';
 import youtubeUpload from "./router/youtubeUpload";
 import stt from "./router/stt";
+import translation from "./router/translation";
 import { closeDbPool } from "./db";
 
 // .env 파일에서 환경 변수 로드
@@ -67,6 +68,7 @@ app.use("/data", express.static(path.join(__dirname, "../../data")));
 app.use(express.static(path.join(__dirname, '../wavesurfer')));
 app.use("/upload", youtubeUpload);
 app.use("/stt", stt);
+app.use("/translation", translation);
 
 // ② React 번들의 정적 파일
 app.use(

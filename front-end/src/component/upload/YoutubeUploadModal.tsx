@@ -20,7 +20,16 @@ type SttResponse = {
   err?: boolean;
   message?: string;
   data?: {
+    translationJobId?: string;
     subtitleCount?: number;
+  };
+};
+
+type TranslationResponse = {
+  err?: boolean;
+  message?: string;
+  data?: {
+    translatedCount?: number;
   };
 };
 
@@ -75,11 +84,37 @@ export default function YoutubeUploadModal(props: YoutubeUploadModalProps) {
         );
       }
 
+      const translationJobId = sttResponse.data?.data?.translationJobId;
+
+      if (!translationJobId) {
+        throw Error("번역을 수행할 작업 ID를 받지 못했습니다.");
+      }
+
       const subtitleCount = sttResponse.data?.data?.subtitleCount;
       setMessage(
         typeof subtitleCount === "number"
-          ? `영상 다운로드와 음성 인식이 완료되었습니다. 생성된 자막: ${subtitleCount}개`
-          : "영상 다운로드와 음성 인식이 완료되었습니다."
+          ? `음성 인식이 완료되었습니다. 생성된 자막: ${subtitleCount}개. 번역을 진행하는 중입니다.`
+          : "음성 인식이 완료되었습니다. 번역을 진행하는 중입니다."
+      );
+
+      const translationResponse = await axios.post<TranslationResponse>(
+        "/translation/gemini",
+        {
+          translationJobId,
+        }
+      );
+
+      if (translationResponse.data?.err) {
+        throw Error(
+          translationResponse.data.message || "자막 번역에 실패했습니다."
+        );
+      }
+
+      const translatedCount = translationResponse.data?.data?.translatedCount;
+      setMessage(
+        typeof translatedCount === "number"
+          ? `영상 다운로드, 음성 인식, 번역이 완료되었습니다. 번역된 자막: ${translatedCount}개`
+          : "영상 다운로드, 음성 인식, 번역이 완료되었습니다."
       );
     } catch (err) {
       const fallbackMessage = "YouTube 영상 처리에 실패했습니다.";
