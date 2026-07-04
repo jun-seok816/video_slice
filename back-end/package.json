@@ -1,6 +1,6 @@
 {  
   "scripts": {
-    "start": "nodemon --exec ./node_modules/.bin/ts-node ./src/web.ts",
+    "start": "nodemon --watch src --ext ts --exec \"node --inspect=9229 -r ts-node/register src/web.ts\"",
     "pstart": "pm2 start ./dist/web.js --name video_slice --watch --max-memory-restart 9900M",
     "build": "cross-env NODE_ENV=development webpack --config webpack.config.js"
   },

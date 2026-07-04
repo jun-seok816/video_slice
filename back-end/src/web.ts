@@ -7,6 +7,7 @@ import session from "express-session";
 var MySQLStore = require("express-mysql-session")(session);
 import cookieParser from "cookie-parser";
 import dotenv from 'dotenv';
+import youtubeUpload from "./router/youtubeUpload";
 
 // .env 파일에서 환경 변수 로드
 dotenv.config();
@@ -73,6 +74,7 @@ const sessionMiddleware = session({
 app.use(sessionMiddleware);
 app.use("/data", express.static(path.join(__dirname, "../../data")));
 app.use(express.static(path.join(__dirname, '../wavesurfer')));
+app.use("/upload", youtubeUpload);
 
 // ② React 번들의 정적 파일
 app.use(
