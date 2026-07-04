@@ -101,8 +101,6 @@ erDiagram
         varchar video_job_id FK "영상 작업 ID"
         enum stt_status "STT 상태"
         enum translation_status "번역 상태"
-        text prompt "STT/번역 참고 프롬프트"
-        json proper_nouns "고유명사 목록"
         text error_message "오류 메시지"
         datetime started_at "시작 일시"
         datetime completed_at "완료 일시"
