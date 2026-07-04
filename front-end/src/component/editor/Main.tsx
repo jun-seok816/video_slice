@@ -10,6 +10,7 @@ import SideBar from "./SideBar";
 import TimecodeListView from "./TimecodeListView";
 import VideoPlayer from "./VideoPlayer";
 import TimeControl from "./TimeControl";
+import YoutubeUploadModal from "../upload/YoutubeUploadModal";
 
 export default function C_Main() {
   const [lv_Obj] = useState(() => {
@@ -17,6 +18,7 @@ export default function C_Main() {
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isYoutubeUploadOpen, setIsYoutubeUploadOpen] = useState(false);
 
   lv_Obj.im_navigate = useNavigate();
 
@@ -68,7 +70,10 @@ export default function C_Main() {
     <section id="dic-editor-page">
       <Tooltip id="dic-editor-page-tooltip" style={{ zIndex: "999999999" }} />
       <div className="Editstyled__Container-sc-1oegqb0-0 irIdhQ">
-        <SideBar lv_Obj={lv_Obj} />
+        <SideBar
+          lv_Obj={lv_Obj}
+          onYoutubeUploadClick={() => setIsYoutubeUploadOpen(true)}
+        />
         <div className="Editstyled__ContentWrapper-sc-1oegqb0-1 iNhaIq">
           <section className="Editstyled__Viewport-sc-1oegqb0-2 eVpoqR">
             <div className="styles__LeftPanel-sc-1j3a0oh-1 kyptUo">
@@ -88,6 +93,10 @@ export default function C_Main() {
           </div>
         </div>
       </div>
+      <YoutubeUploadModal
+        isOpen={isYoutubeUploadOpen}
+        onClose={() => setIsYoutubeUploadOpen(false)}
+      />
     </section>
   );
 }

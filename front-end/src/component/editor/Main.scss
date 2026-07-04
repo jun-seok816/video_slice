@@ -883,7 +883,9 @@ wave::-webkit-scrollbar-track {
 .sidebar-link-button {
   width: 64px;
   padding: 8px 0;
+  border: 0;
   border-radius: 8px;
+  background: transparent;
   color: rgb(92, 94, 101);
   text-decoration: none;
   display: flex;
