@@ -1,7 +1,7 @@
 # 유튜브 AI 번역기
 
-YouTube URL을 입력하면 영상과 음성 인식용 오디오를 서버에 내려받고, AI로 자막을 생성·번역한 뒤 영상과 자막을 함께 보며 바로 검수·수정할 수 있도록 확장한 프로젝트입니다.  
-React와 TypeScript 기반 편집 화면에 Express API를 연결하고, `yt-dlp`, ElevenLabs 음성 인식 API, Gemini 번역 API, MySQL을 조합해 `URL 입력 -> 영상/오디오 다운로드 -> 자막 생성 -> 번역 -> 편집기 검수` 흐름을 구현합니다.
+YouTube URL을 입력하면 영상과 음성 인식용 오디오를 서버에 내려받고, ElevenLabs Scribe v2로 원문 자막을 생성한 뒤 Gemini 3.1 Flash Lite로 번역해 영상과 자막을 함께 보며 바로 검수·수정할 수 있도록 확장한 프로젝트입니다.  
+프론트엔드는 React와 TypeScript로 구현하고, 백엔드는 Express와 MySQL로 작업 상태와 자막 데이터를 관리했습니다. 영상·오디오 다운로드는 yt-dlp, 음성 인식은 ElevenLabs Scribe v2, 자막 번역은 Gemini 3.1 Flash Lite를 사용했습니다.
 
 ---
 
@@ -11,14 +11,14 @@ React와 TypeScript 기반 편집 화면에 Express API를 연결하고, `yt-dlp
 sequenceDiagram
     autonumber
     actor User as 사용자
-    participant FE as 화면(React)
-    participant API as 서버(Express)
-    participant YTDLP as yt-dlp(유튜브 다운로더)
-    participant Speech as 음성 인식
-    participant Gemini as Gemini 번역
-    participant DB as MySQL
-    participant DATA as 저장소(/data/jobs)
-    participant Editor as 자막 편집기
+    participant FE as Front-end<br/>(React)
+    participant API as Back-end<br/>(Express)
+    participant YTDLP as Downloader<br/>(yt-dlp)
+    participant Speech as Speech-to-Text<br/>(ElevenLabs Scribe v2)
+    participant Gemini as Translation<br/>(Gemini 3.1 Flash Lite)
+    participant DB as Database<br/>(MySQL)
+    participant DATA as File Storage<br/>(data/jobs)
+    participant Editor as Subtitle Editor<br/>(React)
 
     rect rgb(245, 248, 255)
         Note over User,API: 1. 유튜브 URL을 입력해 다운로드 작업 생성
