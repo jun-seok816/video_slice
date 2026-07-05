@@ -13,20 +13,16 @@ sequenceDiagram
     actor User as 사용자
     participant FE as Front-end<br/>(React)
     participant API as Back-end<br/>(Express)
-    participant YTDLP as Downloader<br/>(yt-dlp)
     participant Speech as Speech-to-Text<br/>(ElevenLabs Scribe v2)
     participant Gemini as Translation<br/>(Gemini 3.1 Flash Lite)
     participant DB as Database<br/>(MySQL)
-    participant DATA as File Storage<br/>(data/jobs)
     participant Editor as Subtitle Editor<br/>(React)
 
     rect rgb(245, 248, 255)
         Note over User,API: 1. 유튜브 URL을 입력해 다운로드 작업 생성
         User->>FE: 유튜브 URL, 원본 언어, 번역 언어 입력
         FE->>API: /upload/youtube-url 요청
-        API->>DATA: data/jobs/{jobId} 폴더 생성
-        API->>YTDLP: 프론트 재생용 영상 다운로드
-        API->>YTDLP: 자막 생성을 위한 오디오 다운로드
+        API->>API: yt-dlp로 영상과 오디오 다운로드
         API->>DB: ai_video_jobs 저장
         API-->>FE: jobId, videoPath, audioPath 반환
     end
@@ -55,7 +51,7 @@ sequenceDiagram
         Note over FE,Editor: 4. 완료된 번역 영상을 편집기에서 검수
         FE->>API: /translation/completed 목록 조회
         FE->>API: /translation/subtitles 자막 조회
-        Editor->>DATA: videoPath 영상 로드
+        Editor->>API: videoPath 영상 로드
         Editor->>API: 번역 자막 기반 TimeCode 로드
         User->>Editor: 파형과 자막 구간을 보며 검수 및 수정
     end
